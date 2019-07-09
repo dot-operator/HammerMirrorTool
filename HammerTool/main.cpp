@@ -5,20 +5,15 @@
 int main(int argc, char* argv[]) {
 	string filename;
 #ifdef _DEBUG
-	filename = "reflectiontest.vmf";
+	filename = "koth_databank_b3.vmf";
 #endif
 
-	for (int i = 1; i < argc; ++i) {
-		string arg = argv[i];
-		if (arg[0] != '-') {
-			// Assume it's the filename.
-			filename = arg;
-		}
-	}
 #ifndef _DEBUG
-	if (argc < 2 || filename.empty()) {
+	if (argc != 2 ) {
 		std::cout << "Usage: vmfreflect [filename]\n";
+		return 1;
 	}
+	else filename = argv[1];
 #endif
 
 	VMF vmf(filename);

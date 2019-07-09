@@ -1,8 +1,10 @@
 #pragma once
 #include "KeyVals.h"
 #include <string>
+#include <unordered_map>
 
 using std::string;
+using std::unordered_map;
 
 enum ExpectState {
 	Key,
@@ -16,7 +18,7 @@ private:
 
 	unsigned sideID = 0, brushID = 0, entID = 0;
 	unsigned nomirror_visID = 0;
-	unsigned numSkipped = 0;
+	unsigned numSkipped = 0, numIOReflected = 0;
 
 	KeyVals root;
 
@@ -33,6 +35,9 @@ private:
 
 	KeyVals* reflectSolid(KeyVals* kv);
 	KeyVals* reflectEntity(KeyVals* kv);
+	static KeyVals* copyRecursive(KeyVals* kv);
+
+	unordered_map<string, string> reflectedNames; // old name, new name
 public:
 	void Parse(string filepath);
 	void writeFile(string filepath);

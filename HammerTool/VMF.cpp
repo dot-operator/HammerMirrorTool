@@ -127,17 +127,33 @@ KeyVals * VMF::reflectSolid(KeyVals * kv)
 			side->setKey("side");
 
 			for (auto c = child->getFirst(); c; c = child->getNext()) {
-				auto inner = side->addChildTerminal(c->getKey(), c->getValString());
+				if (c->getKey() == "dispinfo") {
+					auto disp = side->addChild();
+					disp->setKey("dispinfo");
 
-				if (inner->getKey() == "plane") {
-					// flip
-					Plane p(inner->getValString());
-					p.mirror();
-					inner->setValString(p.toString());
+					for (auto inf = c->getFirst(); inf; inf = c->getNext()) {
+						if (inf->getKey() == "startposition") {
+							string startpos = inf->getValString().substr(1, inf->getValString().size() - 2);
+							Vector3 pos(startpos);
+							pos.x = -pos.x;
+							disp->addChildTerminal("startposition", "[" + pos.toString() + "]");
+						}
+						else disp->addChildExisting(copyRecursive(inf));
+					}
 				}
-				else if (inner->getKey() == "id") {
-					// increment ID.
-					inner->setValString(std::to_string(++sideID));
+				else {
+					auto inner = side->addChildTerminal(c->getKey(), c->getValString());
+
+					if (inner->getKey() == "plane") {
+						// flip
+						Plane p(inner->getValString());
+						p.mirror();
+						inner->setValString(p.toString());
+					}
+					else if (inner->getKey() == "id") {
+						// increment ID.
+						inner->setValString(std::to_string(++sideID));
+					}
 				}
 			}
 		}
@@ -147,7 +163,7 @@ KeyVals * VMF::reflectSolid(KeyVals * kv)
 		}
 		else {
 			// Just copy it over. (Should just be id -- not robust)
-			mirror->addChildTerminal(child->getKey(), child->getValString());
+			mirror->addChildExisting(copyRecursive(child));
 		}
 	}
 
@@ -164,6 +180,7 @@ KeyVals * VMF::reflectEntity(KeyVals * kv)
 	// Mirror origin about the axis, reflect the angles
 	// Adjust visgroups, make a unique ID
 	// invert TeamNum keyvals
+	// Create a unique targetname
 	for (auto child = kv->getFirst(); child; child = kv->getNext()) {
 		if (child->getKey() == "editor") {
 			// Change the visgroups.
@@ -196,6 +213,11 @@ KeyVals * VMF::reflectEntity(KeyVals * kv)
 		else if (child->getKey() == "id") {
 			// Generate a unique brush ID.
 			mirror->addChildTerminal("id", std::to_string(++entID));
+		}
+		else if (child->getKey() == "targetname") {
+			string newName = child->getValString() + "_mirror";
+			mirror->addChildTerminal("targetname", newName);
+			reflectedNames[child->getValString()] = newName;
 		}
 		else if (child->getKey() == "angles") {
 			// Reflect yaw on the axis.
@@ -234,11 +256,27 @@ KeyVals * VMF::reflectEntity(KeyVals * kv)
 		}
 		else {
 			// Just copy it over. (Should just be id -- not robust)
-			mirror->addChildTerminal(child->getKey(), child->getValString());
+			mirror->addChildExisting(copyRecursive(child));
 		}
 	}
 
 	return mirror;
+}
+
+KeyVals * VMF::copyRecursive(KeyVals * kv)
+{
+	KeyVals* copy = new KeyVals();
+
+	copy->setKey(kv->getKey());
+	if (kv->getValString().empty()) {
+		// copy children
+		for (auto inner = kv->getFirst(); inner; inner = kv->getNext()) {
+			copy->addChildExisting(copyRecursive(inner));
+		}
+	}
+	else 
+		copy->setValString(kv->getValString());
+	return copy;
 }
 
 void VMF::Parse(string filepath)
@@ -440,6 +478,41 @@ void VMF::ReflectEntities()
 	}
 
 	std::cout << "Skipping " << numSkipped << " entities in the no_mirror visgroup...\n";
+	std::cout << "Reflecting IO in reflected entities...\n";
+
+
+	for (auto ent : newEnts) {
+		if (!ent)
+			continue;
+
+		// Find the connections node if there is one.
+		KeyVals* connections;
+		bool hasConnections = false;
+		for (connections = ent->getFirst(); connections; connections = ent->getNext()) {
+			if (connections->getKey() == "connections") {
+				hasConnections = true;
+				break;
+			}
+		}
+
+		if (!hasConnections)
+			continue;
+
+		for (auto io = connections->getFirst(); io; io = connections->getNext()) {
+			auto commaPos = io->getValString().find(',');
+			string connectionName = io->getValString().substr(0, commaPos);
+			if (reflectedNames.find(connectionName) != reflectedNames.end()) {
+				// If we duplicated the connection's target, use the duplicated version.
+				string newName = reflectedNames[connectionName];
+				io->setValString(newName + io->getValString().substr(commaPos));
+				++numIOReflected;
+			}
+		}
+	}
+
+	std::cout << "Rerouted " << numIOReflected << " IO entries to the new duplicated versions.\n";
+
+	// Add the reflected ents to the VMF tree.
 	for (auto ptr : newEnts) {
 		root.addChildExisting(ptr);
 	}

@@ -2,7 +2,7 @@ versioninfo
 {
 	"editorversion" "400"
 	"editorbuild" "7937"
-	"mapversion" "11"
+	"mapversion" "13"
 	"formatversion" "100"
 	"prefab" "0"
 }
@@ -20,7 +20,7 @@ viewsettings
 world
 {
 	"id" "1"
-	"mapversion" "11"
+	"mapversion" "13"
 	"classname" "worldspawn"
 	"detailmaterial" "detail/detailsprites_2fort"
 	"detailvbsp" "detail_2fort.vbsp"
@@ -359,6 +359,8 @@ entity
 	"_quadratic_attn" "1"
 	"angles" "-45 225 0"
 	"pitch" "-45"
+	"spawnflags" "0"
+	"targetname" "named_light"
 	"origin" "-320 192 256"
 	editor
 	{
@@ -392,15 +394,14 @@ entity
 entity
 {
 	"id" "37"
-	"classname" "trigger_hurt"
-	"damage" "10"
-	"damagecap" "20"
-	"damagemodel" "0"
-	"damagetype" "0"
-	"nodmgforce" "0"
+	"classname" "trigger_once"
 	"origin" "-416 136 64"
 	"spawnflags" "1"
 	"StartDisabled" "0"
+	connections
+	{
+		"OnTrigger" "named_light,TurnOff,,0,-1"
+	}
 	solid
 	{
 		"id" "35"

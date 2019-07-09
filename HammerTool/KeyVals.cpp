@@ -6,13 +6,16 @@ KeyVals* KeyVals::addChild()
 {
 	children.push_back(std::make_unique<KeyVals>());
 	children.back()->parent = this;
+	it = children.begin();
 	return children.back().get();
 }
 
 void KeyVals::addChildExisting(KeyVals * kv)
 {
-	if(kv)
+	if (kv) {
 		children.push_back(std::unique_ptr<KeyVals>(kv));
+		it = children.begin();
+	}
 #ifdef _DEBUG
 	else std::cout << "Skipping nullptr child entity, probably from no_mirror.\n";
 #endif
@@ -22,6 +25,7 @@ KeyVals* KeyVals::addChildTerminal(const string & key, const string & val)
 {
 	children.push_back(std::make_unique<KeyVals>(key, val));
 	children.back()->parent = this;
+	it = children.begin();
 	return children.back().get();
 }
 
