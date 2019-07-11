@@ -2,9 +2,11 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <sstream>
 #include "Plane.h"
+#include "DisplacementLayer.h"
 
-
+// Write VMF tree back to file
 const string VMF::writeChild(KeyVals * kv, unsigned depth)
 {
 #define ADD_TABS for (unsigned i = 0; i < depth; ++i) { result += "\t"; }
@@ -37,6 +39,7 @@ const string VMF::writeChild(KeyVals * kv, unsigned depth)
 #undef ADD_TABS
 }
 
+// Lexing functions for parsing
 bool VMF::getNextToken()
 {
 	while (sourcePos != source.end() && (iswspace(*sourcePos))) {
@@ -88,6 +91,7 @@ void VMF::makeToken()
 	}
 }
 
+// Replicate a brush or brush entity and reflect it on the Y axis.
 KeyVals * VMF::reflectSolid(KeyVals * kv)
 {
 	KeyVals* mirror = new KeyVals();
@@ -132,11 +136,28 @@ KeyVals * VMF::reflectSolid(KeyVals * kv)
 					disp->setKey("dispinfo");
 
 					for (auto inf = c->getFirst(); inf; inf = c->getNext()) {
-						if (inf->getKey() == "startposition") {
+						string key = inf->getKey();
+						const string displacementVectors[] = { "normals", "offsets", "offset_normals" };
+						const string displacementTags[] = { "distances", "alphas", "triangle_tags" };
+
+						if (key == "startposition") {
 							string startpos = inf->getValString().substr(1, inf->getValString().size() - 2);
 							Vector3 pos(startpos);
 							pos.x = -pos.x;
 							disp->addChildTerminal("startposition", "[" + pos.toString() + "]");
+						}
+						else if (std::find(std::begin(displacementVectors), std::end(displacementVectors), key) != std::end(displacementVectors)) {
+							// Displacement data parse and reflect
+							VectorDisplacementLayer layer(inf);
+							layer = layer.rotate();
+							disp->addChildExisting(layer.getNode());
+							disp->getLast()->setKey(key);
+						}
+						else if (std::find(std::begin(displacementTags), std::end(displacementTags), key) != std::end(displacementTags)) {
+							ScalarDisplacementLayer layer(inf);
+							layer = layer.rotate();
+							disp->addChildExisting(layer.getNode());
+							disp->getLast()->setKey(key);
 						}
 						else disp->addChildExisting(copyRecursive(inf));
 					}
@@ -150,9 +171,17 @@ KeyVals * VMF::reflectSolid(KeyVals * kv)
 						p.mirror();
 						inner->setValString(p.toString());
 					}
+					else if (inner->getKey() == "uaxis" || inner->getKey() == "vaxis") {
+						// Flip texture.
+						string xAxis = inner->getValString().substr(1, inner->getValString().find(' ') - 1);
+						float scale = std::stof(xAxis);
+						scale = -scale;
+						inner->setValString("[" + std::to_string(scale) + inner->getValString().substr(1 + xAxis.size()));
+					}
 					else if (inner->getKey() == "id") {
 						// increment ID.
 						inner->setValString(std::to_string(++sideID));
+						reflectedSides[std::stoi(c->getValString())] = sideID;
 					}
 				}
 			}
@@ -160,6 +189,7 @@ KeyVals * VMF::reflectSolid(KeyVals * kv)
 		else if (child->getKey() == "id") {
 			// Generate a unique brush ID.
 			mirror->addChildTerminal("id", std::to_string(++brushID));
+			// Save the original side for overlays to retarget later.
 		}
 		else {
 			// Just copy it over. (Should just be id -- not robust)
@@ -170,6 +200,7 @@ KeyVals * VMF::reflectSolid(KeyVals * kv)
 	return mirror;
 }
 
+// Copy an entity and reflect it across the Y axis (negate X).
 KeyVals * VMF::reflectEntity(KeyVals * kv)
 {
 	KeyVals* mirror = new KeyVals();
@@ -263,6 +294,8 @@ KeyVals * VMF::reflectEntity(KeyVals * kv)
 	return mirror;
 }
 
+
+// Deep copy of a node and its children
 KeyVals * VMF::copyRecursive(KeyVals * kv)
 {
 	KeyVals* copy = new KeyVals();
@@ -279,13 +312,32 @@ KeyVals * VMF::copyRecursive(KeyVals * kv)
 	return copy;
 }
 
+// Overlays contain a CSV list of sides they're applied to
+vector<int> VMF::parseSides(const string & sides)
+{
+	vector<int> result;
+
+	std::stringstream stream(sides);
+	int i;
+	while (stream >> i) {
+		result.push_back(i);
+		if (stream.peek() == ',') {
+			stream.ignore();
+		}
+	}
+
+	return result;
+}
+
+// Read a file into a VMF tree
 void VMF::Parse(string filepath)
 {
 	std::cout << "Opening map " << filepath << "...\n";
 	std::ifstream file;
 	file.open(filepath);
 	if (!file.is_open()) {
-		std::cout << "Couldn't open the file.\n";
+		std::cout << "ERROR: Couldn't open file " << filepath << ".\n";
+		system("pause");
 		exit(1);
 	}
 
@@ -354,7 +406,7 @@ void VMF::Parse(string filepath)
 							sideID = std::max(id, sideID);
 						else if (parentKey == "solid")
 							brushID = std::max(id, brushID);
-						else if (parentKey != "world") {
+						else if (parentKey != "world" || parentKey != "groupid") {
 							std::cout << "Didn't recognize the owner of the ID keyfield: \n\t" << parentKey << " #" << id << "\n";
 							std::cout << "ID won't be incremented if it's mirrored.\n\n";
 						}
@@ -393,7 +445,7 @@ void VMF::Parse(string filepath)
 
 void VMF::writeFile(string filepath)
 {
-	std::cout << "Writing the map to " << filepath << "...\n";
+	std::cout << "\nWriting the map to " << filepath << "...\n";
 
 	std::ofstream file(filepath);
 	if (!file.is_open()) {
@@ -448,7 +500,7 @@ void VMF::ReflectBrushes()
 		return;
 	}
 
-	std::cout << "Reflecting world brushes...\n";
+	std::cout << "\nReflecting world brushes...\n";
 
 	// Create the reflected brushwork.
 	vector<KeyVals*> newBrushes;
@@ -465,10 +517,12 @@ void VMF::ReflectBrushes()
 	std::cout << "Skipping " << numSkipped << " brushes in the no_mirror visgroup...\n";
 }
 
+// Copy/reflect entities and fix up names/IO
 void VMF::ReflectEntities()
 {
 	numSkipped = 0;
-	std::cout << "Reflecting entities...\n";
+	int numOverlays = 0, numSoundscapes = 0;
+	std::cout << "\nReflecting entities...\n";
 
 	vector<KeyVals*> newEnts;
 	for (auto kv = root.getFirst(); kv; kv = root.getNext()) {
@@ -478,12 +532,57 @@ void VMF::ReflectEntities()
 	}
 
 	std::cout << "Skipping " << numSkipped << " entities in the no_mirror visgroup...\n";
-	std::cout << "Reflecting IO in reflected entities...\n";
+	std::cout << "\nReflecting IO in reflected entities...\n";
 
 
 	for (auto ent : newEnts) {
 		if (!ent)
 			continue;
+
+		// fix up per-entity targets
+		auto classname = ent->find("classname");
+		if (classname) {
+			string name = classname->getValString();
+			if (name == "env_soundscape") {
+				for (auto key = ent->getFirst(); key; key = ent->getNext()) {
+					if (key->getKey().find("position") != string::npos) {
+						// Fix up position targetname
+						if (reflectedNames.find(key->getValString()) != reflectedNames.end()) {
+							key->setValString(reflectedNames[key->getValString()]);
+						}
+					}
+				}
+				numSoundscapes++;
+			}
+			else if (name == "info_overlay") {
+				// Invert normals as necessary
+				auto key = ent->find("BasisNormal");
+				Vector3 normal(key->getValString());
+				normal.x = -normal.x;
+				key->setValString(normal.toString());
+
+				key = ent->find("BasisOrigin");
+				normal = Vector3(key->getValString());
+				normal.x = -normal.x;
+				key->setValString(normal.toString());
+
+				auto sides = ent->find("sides");
+				if (!sides)
+					continue;
+
+				// Convert any sides to the duplicated version.
+				vector<int> sideArr = parseSides(sides->getValString());
+				string result;
+				for (auto& s : sideArr) {
+					if (reflectedSides.find(s) != reflectedSides.end()) {
+						s = reflectedSides[s];
+					}
+					result += std::to_string(s) + ",";
+				}
+				sides->setValString(result.substr(0, result.size() - 1));
+				numOverlays++;
+			}
+		}
 
 		// Find the connections node if there is one.
 		KeyVals* connections;
@@ -511,6 +610,7 @@ void VMF::ReflectEntities()
 	}
 
 	std::cout << "Rerouted " << numIOReflected << " IO entries to the new duplicated versions.\n";
+	std::cout << "Retargeted " << numOverlays << " overlay brush sides and " << numSoundscapes << " soundscapes.\n";
 
 	// Add the reflected ents to the VMF tree.
 	for (auto ptr : newEnts) {

@@ -38,6 +38,9 @@ private:
 	static KeyVals* copyRecursive(KeyVals* kv);
 
 	unordered_map<string, string> reflectedNames; // old name, new name
+	unordered_map<int, int> reflectedSides;
+
+	vector<int> parseSides(const string& sides);
 public:
 	void Parse(string filepath);
 	void writeFile(string filepath);

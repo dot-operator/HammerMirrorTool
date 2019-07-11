@@ -45,6 +45,8 @@ public:
 		return (it + 1) != children.end();
 	}
 
+	KeyVals* find(const string& s, bool next = false);
+
 
 	string getKey() {
 		return key;

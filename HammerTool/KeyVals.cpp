@@ -1,4 +1,5 @@
 #include "KeyVals.h"
+#include <string>
 #include <iostream>
 
 
@@ -27,6 +28,24 @@ KeyVals* KeyVals::addChildTerminal(const string & key, const string & val)
 	children.back()->parent = this;
 	it = children.begin();
 	return children.back().get();
+}
+
+KeyVals * KeyVals::find(const string & s, bool next)
+{
+	KeyVals* i = nullptr;
+	if (getValString().empty()) {
+		if (!next) i = getFirst();
+
+		for (; i; i = getNext()) {
+			if (i->getKey() == s)
+				return i;
+		}
+	}
+	else {
+		std::cout << "ERROR: Couldn't find children for key " << key << " because it already has a string value: " << value << "\n";
+	}
+
+	return nullptr;
 }
 
 void KeyVals::setValString(const string & v)
