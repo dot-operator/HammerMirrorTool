@@ -6,7 +6,7 @@ Use a "no_mirror" visgroup to prevent parts of the map from being mirrored.
   Mirrored entities will be renamed such that team names match the opposing side.
   Any game logic will be duplicated, and the relevant teams will be flipped or reassigned as necessary.
   
-UVs of materials applied to brushes and displacements will automatically be flipped.
+UVs of materials applied to brushes and displacements will automatically be flipped. Brush faces on overlays will be reassigned. IO will be retargetted where applicable.
 
 To do:
 - Mirror across an arbitrary axis
